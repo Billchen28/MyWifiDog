@@ -1,9 +1,9 @@
 #ifndef _POOL_H_
 #define _POOL_H_
 
-#ifndef POOL_DEBUG
-#define POOL_DEBUG
-#endif
+// #ifndef POOL_DEBUG
+// #define POOL_DEBUG
+// #endif
 
 #ifndef NULL
 #define NULL 0

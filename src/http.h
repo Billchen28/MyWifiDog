@@ -39,6 +39,9 @@ void http_callback_about(httpd *, request *);
 void http_callback_status(httpd *, request *);
 /**@brief Callback for libhttpd, main entry point post login for auth confirmation */
 void http_callback_auth(httpd *, request *);
+
+void http_callback_wx_temp_auth(httpd *, request *);
+
 /**@brief Callback for libhttpd, disconnect user from network */
 void http_callback_disconnect(httpd *, request *);
 

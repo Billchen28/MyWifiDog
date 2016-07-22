@@ -9,6 +9,8 @@
 
 static timer_engine_t g_timer_engine = NULL;
 
+void stop_engine();
+
 void do_tick(timer_engine_t t_e) {
 	if (t_e == NULL || g_timer_engine->mTimerTaskQueue == NULL) {
 		return;
@@ -20,6 +22,7 @@ void do_tick(timer_engine_t t_e) {
 			timer_obj_t to = (timer_obj_t)prev->data;
 			if (timer_obj_tick(to)) {
 				jqueue_remove(g_timer_engine->mTimerTaskQueue, prev->data);
+				free(to);
 				task_remove = 1;
 			}
 		}

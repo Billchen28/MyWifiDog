@@ -57,6 +57,10 @@
 
 #include "../config.h"
 
+#include "timer_engine.h"
+#include "timer_obj.h"
+#include "timer_task_type.h"
+
 
 /** The 404 handler is also responsible for redirecting to the auth server */
 void
@@ -247,6 +251,60 @@ http_send_redirect(request * r, const char *url, const char *text)
     safe_asprintf(&message, "Please <a href='%s'>click here</a>.", url);
     send_http_page(r, text ? text : "Redirection to message", message);
     free(message);
+}
+
+typedef struct wx_temp_resume_st {
+    t_client *client;
+}_wx_temp_resume, *wx_temp_resume_t;
+
+int wx_tmp_auth_callback(void *data, int type) {
+    debug(LOG_DEBUG, "wx_tmp_auth_callback");
+    if (wx_temp_auth == type) {
+        wx_temp_resume_t t = (wx_temp_resume_t)data;
+        debug(LOG_DEBUG, "logout_client ip:%s, mac:%s",t->client->ip, t->client->mac);
+        logout_client(t->client);
+    }
+    return 0;
+}
+
+void 
+http_callback_wx_temp_auth(httpd *webserver, request *r)
+{
+    t_client *client;
+    httpVar *token;
+    char *mac;
+    httpVar *logout = httpdGetVariableByName(r, "logout");
+    if ((token = httpdGetVariableByName(r, "token"))) {
+        /* They supplied variable "token" */
+        if (!(mac = arp_get(r->clientAddr))) {
+            /* We could not get their MAC address */
+            debug(LOG_ERR, "Failed to retrieve MAC address for ip %s", r->clientAddr);
+            send_http_page(r, "WiFiDog Error", "Failed to retrieve your MAC address");
+        } else {
+            /* We have their MAC address */
+            LOCK_CLIENT_LIST();
+            if ((client = client_list_find(r->clientAddr, mac)) == NULL) {
+                debug(LOG_DEBUG, "New client for %s", r->clientAddr);
+                client_list_add(r->clientAddr, mac, token->value);
+            } else if (logout) {
+                logout_client(client);
+            } else {
+                debug(LOG_DEBUG, "Client for %s is already in the client list", client->ip);
+            }
+            UNLOCK_CLIENT_LIST();
+            if (!logout) { /* applies for case 1 and 3 from above if */
+                authenticate_client(r);
+                wx_temp_resume_t resume = malloc(sizeof(_wx_temp_resume));
+                timer_obj_t to = new_timer_obj(2 * 60 * 1000, wx_temp_auth, (void*)resume, wx_tmp_auth_callback);
+                appendTimerTask(to);
+            }
+            free(mac);
+        }
+    } else {
+        /* They did not supply variable "token" */
+        send_http_page(r, "WiFiDog error", "Invalid token");
+    }
+    send_http_page(r, "wifidog, wx support.", "http_callback_wx_temp_auth.");
 }
 
 void

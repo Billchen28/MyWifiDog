@@ -29,7 +29,8 @@ void _pool__free(void *block)
 pool_t _pool_new(const char *zone, int line)
 {
     pool_t p;
-    while((p = _pool__malloc(sizeof(_pool))) == NULL) sleep(1);
+//    while((p = _pool__malloc(sizeof(_pool))) == NULL) sleep(1);
+    p = _pool__malloc(sizeof(_pool));
     p->cleanup = NULL;
     p->heap = NULL;
     p->size = 0;
@@ -77,7 +78,8 @@ static struct pfree *_pool_free(pool_t p, pool_cleanup_t f, void *arg)
     struct pfree *ret;
 
     /* make the storage for the tracker */
-    while((ret = _pool__malloc(sizeof(struct pfree))) == NULL) sleep(1);
+//    while((ret = _pool__malloc(sizeof(struct pfree))) == NULL) sleep(1);
+    ret = _pool__malloc(sizeof(struct pfree));
     ret->f = f;
     ret->arg = arg;
     ret->next = NULL;
@@ -92,8 +94,10 @@ static struct pheap *_pool_heap(pool_t p, int size)
     struct pfree *clean;
 
     /* make the return heap */
-    while((ret = _pool__malloc(sizeof(struct pheap))) == NULL) sleep(1);
-    while((ret->block = _pool__malloc(size)) == NULL) sleep(1);
+//    while((ret = _pool__malloc(sizeof(struct pheap))) == NULL) sleep(1);
+    ret = _pool__malloc(sizeof(struct pheap));
+//    while((ret->block = _pool__malloc(size)) == NULL) sleep(1);
+    ret->block = _pool__malloc(size);
     ret->size = size;
     p->size += size;
     ret->used = 0;
@@ -127,7 +131,8 @@ void *pmalloc(pool_t p, int size)
     /* if there is no heap for this pool or it's a big request, just raw, I like how we clean this :) */
     if(p->heap == NULL || size > (p->heap->size / 2))
     {
-        while((block = _pool__malloc(size)) == NULL) sleep(1);
+//        while((block = _pool__malloc(size)) == NULL) sleep(1);
+        block = _pool__malloc(size);
         p->size += size;
         _pool_cleanup_append(p, _pool_free(p, _pool__free, block));
         return block;
