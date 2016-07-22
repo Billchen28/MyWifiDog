@@ -34,7 +34,11 @@ libgateway_a_SOURCES = commandline.c \
 	httpd_thread.c \
 	simple_http.c \
 	pstring.c \
-	wd_util.c
+	wd_util.c \
+	pool.c \
+	jqueue.c \
+	timer_engine.c \
+	timer_obj.c
 
 noinst_HEADERS = commandline.h \
 	common.h \
@@ -55,7 +59,11 @@ noinst_HEADERS = commandline.h \
 	httpd_thread.h \
 	simple_http.h \
 	pstring.h \
-	wd_util.h
+	wd_util.h \
+	jqueue.h \
+	pool.h \
+	timer_engine.h \
+	timer_obj.h
 
 wdctl_LDADD = libgateway.a
 
