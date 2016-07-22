@@ -1,6 +1,6 @@
 # $Id$
 
-%define name wifidog
+%define name wifidog for gz_tx
 %define lib_name libhttpd
 %define version @VERSION@
 %define release 1mdk
@@ -66,4 +66,5 @@ rm -rf $RPM_BUILD_ROOT
 - Littles fixes and libofx leftover.
 - Prefix changed to /usr to match init.d script (define removed).
 * Sat Mar 8 2004 Benoit Grégoire <bock@step.polymtl.ca>
+* Modified by jiubiaochen.
 - Created spec file

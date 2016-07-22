@@ -391,6 +391,15 @@ main_loop(void)
         debug(LOG_DEBUG, "%s = %s", config->gw_interface, config->gw_id);
     }
 
+    if (!config->gw_mac) {
+        debug(LOG_DEBUG, "get MAC address of %s", config->gw_interface);
+        if ((config->gw_mac = get_iface_mac(config->gw_interface)) == NULL) {
+            debug(LOG_ERR, "Could not get MAC address information of %s, exiting...", config->gw_interface);
+            exit(1);
+        }
+        debug(LOG_DEBUG, "gw_mac %s = %s", config->gw_interface, config->gw_mac);
+    }
+
     /* Initializes the web server */
     debug(LOG_NOTICE, "Creating web server on %s:%d", config->gw_address, config->gw_port);
     if ((webserver = httpdCreate(config->gw_address, config->gw_port)) == NULL) {

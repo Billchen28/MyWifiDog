@@ -110,14 +110,14 @@ http_callback_404(httpd * webserver, request * r, int error_code)
             /* We could not get their MAC address */
             debug(LOG_INFO, "Failed to retrieve MAC address for ip %s, so not putting in the login request",
                   r->clientAddr);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&ip=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
-                          config->gw_id, r->clientAddr, url);
+                          config->gw_id, config->gw_mac, r->clientAddr, url);
         } else {
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&ip=%s&mac=%s&url=%s",
+            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&mac=%s&url=%s",
                           auth_server->authserv_login_script_path_fragment,
-                          config->gw_address, config->gw_port, config->gw_id, r->clientAddr, mac, url);
+                          config->gw_address, config->gw_port, config->gw_id, config->gw_mac, r->clientAddr, mac, url);
             free(mac);
         }
 
@@ -316,11 +316,10 @@ http_callback_disconnect(httpd * webserver, request * r)
             httpdOutput(r, "Invalid token for MAC");
             return;
         }
-
         /* TODO: get current firewall counters */
         logout_client(client);
         UNLOCK_CLIENT_LIST();
-
+        httpdOutput(r, "Disconnect success.");
     } else {
         debug(LOG_INFO, "Disconnect called without both token and MAC given");
         httpdOutput(r, "Both the token and MAC need to be specified");
