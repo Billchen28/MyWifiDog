@@ -1,0 +1,14 @@
+Package: wifidog
+Version: 1.2.1-1
+Depends: libc, iptables-mod-extra, iptables-mod-ipopt, iptables-mod-nat-extra, libpthread
+Source: package/wifidog
+License: GPL-2.0
+LicenseFiles: COPYING
+Section: net
+Maintainer: Michael Haas <haas@computerlinguist.org>
+Architecture: ar71xx
+Installed-Size: 43652
+Description:  The Wifidog project is a complete and embeddable captive
+ portal solution for wireless community groups or individuals
+ who wish to open a free Hotspot while still preventing abuse
+ of their Internet connection.
