@@ -195,7 +195,7 @@ get_iface_mac(const char *ifname)
 {
     int r, s;
     struct ifreq ifr;
-    char *hwaddr, mac[15];
+    char *hwaddr, mac[18];
 
     strncpy(ifr.ifr_name, ifname, 15);
     ifr.ifr_name[15] = '\0';

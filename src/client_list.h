@@ -31,7 +31,7 @@
 /** Global mutex to protect access to the client list */
 extern pthread_mutex_t client_list_mutex;
 
-enum e_auth_type{normal_auth_type = 0, wx_temp_auth_type = 1};
+enum e_auth_type{normal_auth_type = 0, wx_temp_auth_type = 1, wx_auth_type = 2};
 
 /** Counters struct for a client's bandwidth usage (in bytes)
  */

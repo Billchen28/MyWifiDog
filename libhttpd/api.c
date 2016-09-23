@@ -48,6 +48,10 @@
 #include <varargs.h>
 #endif
 
+#include "debug.h"
+#include <syslog.h>
+#include <sys/types.h>
+
 char *
 httpdUrlEncode(str)
 const char *str;
@@ -385,9 +389,19 @@ httpdReadRequest(httpd * server, request * r)
      */
     count = 0;
     inHeaders = 1;
+//    debug(LOG_INFO, "-----------start httpdReadRequest----------------");
     while (_httpd_readLine(r, buf, HTTP_MAX_LEN) > 0) {
         count++;
-
+//        debug(LOG_INFO, "line:%d:%s", count, buf);
+        if (strncasecmp(buf, "User-Agent: ", 12) == 0) {
+            cp = strchr(buf, ':');
+            if (cp) {
+                cp += 2;
+                memset(r->request.user_agent, 0, HTTP_MAX_UA);
+                strncpy(r->request.user_agent, cp, HTTP_MAX_UA);
+//                debug(LOG_INFO, "ua:%s", r->request.user_agent);
+            }
+        }
         /*
          ** Special case for the first line.  Scan the request
          ** method and path etc
@@ -434,7 +448,6 @@ httpdReadRequest(httpd * server, request * r)
                  */
                 break;
             }
-
             if (strncasecmp(buf, "Authorization: ", 15) == 0) {
                 cp = strchr(buf, ':');
                 if (cp) {
@@ -458,9 +471,7 @@ httpdReadRequest(httpd * server, request * r)
                         r->request.authUser[HTTP_MAX_AUTH - 1] = 0;
                     }
                 }
-            }
-            /* acv@acv.ca/wifidog: Added decoding of host: if
-             * present. */
+            } 
             if (strncasecmp(buf, "Host: ", 6) == 0) {
                 cp = strchr(buf, ':');
                 if (cp) {
@@ -473,6 +484,7 @@ httpdReadRequest(httpd * server, request * r)
             continue;
         }
     }
+//    debug(LOG_INFO, "-----------end httpdReadRequest----------------");
 
     /*
      ** Process any URL data
@@ -484,7 +496,6 @@ httpdReadRequest(httpd * server, request * r)
         r->request.query[sizeof(r->request.query) - 1] = 0;
         _httpd_storeData(r, cp);
     }
-
     return (0);
 }
 

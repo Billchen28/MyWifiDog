@@ -29,6 +29,8 @@
 
 #include "httpd.h"
 
+enum e_req_src{normal_req = 0, wx_req = 1};
+
 /**@brief Callback for libhttpd, main entry point for captive portal */
 void http_callback_404(httpd *, request *, int);
 /**@brief Callback for libhttpd */
@@ -41,6 +43,8 @@ void http_callback_status(httpd *, request *);
 void http_callback_auth(httpd *, request *);
 
 void http_callback_wx_temp_auth(httpd *, request *);
+
+void http_wx_auth(httpd *, request *);
 
 /**@brief Callback for libhttpd, disconnect user from network */
 void http_callback_disconnect(httpd *, request *);

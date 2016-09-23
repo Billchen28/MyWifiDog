@@ -130,8 +130,8 @@ logout_client(t_client * client)
  * Alters the firewall rules depending on what the auth server says
 @param r httpd request struct
 */
-void
-authenticate_client(request * r)
+int
+authenticate_client(request * r, int skip_get_protal)
 {
     t_client *client, *tmp;
     t_authresponse auth_response;
@@ -180,10 +180,8 @@ authenticate_client(request * r)
         free(token);
         return;
     }
-
     client_list_destroy(client);        /* Free the cloned client */
     client = tmp;
-
     if (strcmp(token, client->token) != 0) {
         /* If token changed, save it. */
         free(client->token);
@@ -191,73 +189,78 @@ authenticate_client(request * r)
     } else {
         free(token);
     }
+    if (!skip_get_protal) {
+        /* Prepare some variables we'll need below */
+        config = config_get_config();
+        auth_server = get_auth_server();
 
-    /* Prepare some variables we'll need below */
-    config = config_get_config();
-    auth_server = get_auth_server();
+        switch (auth_response.authcode) {
 
-    switch (auth_response.authcode) {
+        case AUTH_ERROR:
+            /* Error talking to central server */
+            debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
+                  client->mac);
+            send_http_page(r, "Error!", "Error: We did not get a valid answer from the central server");
+            break;
 
-    case AUTH_ERROR:
-        /* Error talking to central server */
-        debug(LOG_ERR, "Got ERROR from central server authenticating token %s from %s at %s", client->token, client->ip,
-              client->mac);
-        send_http_page(r, "Error!", "Error: We did not get a valid answer from the central server");
-        break;
+        case AUTH_DENIED:
+            /* Central server said invalid token */
+            debug(LOG_INFO,
+                  "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
+                  client->token, client->ip, client->mac);
+            fw_deny(client);
+            safe_asprintf(&urlFragment, "%smessage=%s",
+                          auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
+            http_send_redirect_to_auth(r, urlFragment, "Redirect to denied message");
+            free(urlFragment);
+            break;
 
-    case AUTH_DENIED:
-        /* Central server said invalid token */
-        debug(LOG_INFO,
-              "Got DENIED from central server authenticating token %s from %s at %s - deleting from firewall and redirecting them to denied message",
-              client->token, client->ip, client->mac);
-        fw_deny(client);
-        safe_asprintf(&urlFragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_DENIED);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to denied message");
-        free(urlFragment);
-        break;
+        case AUTH_VALIDATION:
+            /* They just got validated for X minutes to check their email */
+            debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
+                  "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
+            fw_allow(client, FW_MARK_PROBATION);
+            safe_asprintf(&urlFragment, "%smessage=%s",
+                          auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
+            http_send_redirect_to_auth(r, urlFragment, "Redirect to activate message");
+            free(urlFragment);
+            break;
 
-    case AUTH_VALIDATION:
-        /* They just got validated for X minutes to check their email */
-        debug(LOG_INFO, "Got VALIDATION from central server authenticating token %s from %s at %s"
-              "- adding to firewall and redirecting them to activate message", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_PROBATION);
-        safe_asprintf(&urlFragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACTIVATE_ACCOUNT);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to activate message");
-        free(urlFragment);
-        break;
+        case AUTH_ALLOWED:
+            /* Logged in successfully as a regular account */
+            debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
+                  "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
+            fw_allow(client, FW_MARK_KNOWN);
+            served_this_session++;
+            safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
+            http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
+            free(urlFragment);
+            break;
 
-    case AUTH_ALLOWED:
-        /* Logged in successfully as a regular account */
-        debug(LOG_INFO, "Got ALLOWED from central server authenticating token %s from %s at %s - "
-              "adding to firewall and redirecting them to portal", client->token, client->ip, client->mac);
-        fw_allow(client, FW_MARK_KNOWN);
-        served_this_session++;
-        safe_asprintf(&urlFragment, "%sgw_id=%s", auth_server->authserv_portal_script_path_fragment, config->gw_id);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to portal");
-        free(urlFragment);
-        break;
+        case AUTH_VALIDATION_FAILED:
+            /* Client had X minutes to validate account by email and didn't = too late */
+            debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
+                  "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
+            safe_asprintf(&urlFragment, "%smessage=%s",
+                          auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
+            http_send_redirect_to_auth(r, urlFragment, "Redirect to failed validation message");
+            free(urlFragment);
+            break;
 
-    case AUTH_VALIDATION_FAILED:
-        /* Client had X minutes to validate account by email and didn't = too late */
-        debug(LOG_INFO, "Got VALIDATION_FAILED from central server authenticating token %s from %s at %s "
-              "- redirecting them to failed_validation message", client->token, client->ip, client->mac);
-        safe_asprintf(&urlFragment, "%smessage=%s",
-                      auth_server->authserv_msg_script_path_fragment, GATEWAY_MESSAGE_ACCOUNT_VALIDATION_FAILED);
-        http_send_redirect_to_auth(r, urlFragment, "Redirect to failed validation message");
-        free(urlFragment);
-        break;
+        default:
+            debug(LOG_WARNING,
+                  "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
+                  auth_response.authcode, client->token, client->ip, client->mac);
+            send_http_page(r, "Internal Error", "We can not validate your request at this time");
+            break;
 
-    default:
-        debug(LOG_WARNING,
-              "I don't know what the validation code %d means for token %s from %s at %s - sending error message",
-              auth_response.authcode, client->token, client->ip, client->mac);
-        send_http_page(r, "Internal Error", "We can not validate your request at this time");
-        break;
-
+        }
+    } else {
+        if (auth_response.authcode == AUTH_ALLOWED) {
+            fw_allow(client, FW_MARK_KNOWN);
+            served_this_session++;
+        }
     }
-
     UNLOCK_CLIENT_LIST();
-    return;
+    return auth_response.authcode;
 }

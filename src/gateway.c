@@ -402,7 +402,6 @@ main_loop(void)
         exit(1);
     }
     register_fd_cleanup_on_fork(webserver->serverSock);
-
     debug(LOG_DEBUG, "Assigning callbacks to web server");
     httpdAddCContent(webserver, "/", "wifidog", 0, NULL, http_callback_wifidog);
     httpdAddCContent(webserver, "/wifidog", "", 0, NULL, http_callback_wifidog);
@@ -411,6 +410,7 @@ main_loop(void)
     httpdAddCContent(webserver, "/wifidog", "auth", 0, NULL, http_callback_auth);
     httpdAddCContent(webserver, "/wifidog", "disconnect", 0, NULL, http_callback_disconnect);
     httpdAddCContent(webserver, "/wifidog", "wx_tmp_auth", 0, NULL, http_callback_wx_temp_auth);
+    httpdAddCContent(webserver, "/wifidog", "wx_auth", 0, NULL, http_wx_auth);
 
     httpdSetErrorFunction(webserver, 404, http_callback_404);
 
@@ -421,7 +421,7 @@ main_loop(void)
         debug(LOG_ERR, "FATAL: Failed to initialize firewall");
         exit(1);
     }
-
+    fw_allow_host("wifi.weixin.qq.com");
     /* Start clean up thread */
     result = pthread_create(&tid_fw_counter, NULL, (void *)thread_client_timeout_check, NULL);
     if (result != 0) {

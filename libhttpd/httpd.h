@@ -56,7 +56,8 @@ extern "C" {
 #define	HTTP_PORT 		80
 #define HTTP_MAX_LEN		10240
 #define HTTP_MAX_URL		1024
-#define HTTP_MAX_HEADERS	1024
+#define HTTP_MAX_HEADERS	512
+#define HTTP_MAX_UA 512
 #define HTTP_MAX_AUTH		128
 #define	HTTP_IP_ADDR_LEN	17
 #define	HTTP_TIME_STRING_LEN	40
@@ -97,6 +98,7 @@ extern "C" {
         char path[HTTP_MAX_URL], query[HTTP_MAX_URL], host[HTTP_MAX_URL],       /* acv@acv.ca/wifidog: Added decoding
                                                                                    of host: header if present. */
          ifModified[HTTP_MAX_URL];
+        char user_agent[HTTP_MAX_UA];
         char authUser[HTTP_MAX_AUTH];
         char authPassword[HTTP_MAX_AUTH];
     } httpReq;

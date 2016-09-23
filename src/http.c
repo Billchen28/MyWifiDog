@@ -62,6 +62,108 @@
 #include "timer_task_type.h"
 
 
+typedef struct {  
+    char **str;     //the PChar of string array  
+    size_t num;     //the number of string  
+}IString;  
+
+void releaseIString(IString* v) {
+    int j = 0;
+    for (j=0;j<v->num;j++) {
+        char *c = v->str[j];
+        if (c != NULL) {
+            free(c);    
+        }
+    }
+    free(v->str);
+}
+
+/** \Split string by a char 
+ * 
+ * \param  src:the string that you want to split 
+ * \param  delim:split string by this char 
+ * \param  istr:a srtuct to save string-array's PChar and string's amount. 
+ * \return  whether or not to split string successfully 
+ * 
+ */  
+int Split(char *src, char *delim, IString* istr)//split buf  
+{  
+    int i;  
+    char *str = NULL, *p = NULL;  
+  
+    (*istr).num = 1;  
+    str = (char*)calloc(strlen(src)+1,sizeof(char));  
+    if (str == NULL) return 0;  
+    (*istr).str = (char**)calloc(1,sizeof(char *));  
+    if ((*istr).str == NULL) return 0;  
+    strcpy(str,src);  
+  
+    p = strtok(str, delim);  
+    (*istr).str[0] = (char*)calloc(strlen(p)+1,sizeof(char));  
+    if ((*istr).str[0] == NULL) return 0;  
+    strcpy((*istr).str[0],p);  
+    for(i=1; p = strtok(NULL, delim); i++)  
+    {  
+        (*istr).num++;  
+        (*istr).str = (char**)realloc((*istr).str,(i+1)*sizeof(char *));  
+        if ((*istr).str == NULL) return 0;  
+        (*istr).str[i] = (char*)calloc(strlen(p)+1,sizeof(char));  
+        if ((*istr).str[0] == NULL) return 0;  
+        strcpy((*istr).str[i],p);  
+    }  
+    free(str);  
+    str = p = NULL;  
+    return 1;  
+}  
+
+
+typedef struct extend_arg_st {
+    char *ip;
+//    char *mac;
+}_extend_arg, *extend_arg_t;
+
+
+void free_extend_arg(extend_arg_t v) {
+    if (v->ip != NULL) {
+        free(v->ip);
+    }
+    // if (v->mac != NULL) {
+    //     free(v->mac);
+    // }
+}
+
+extend_arg_t parseExtend(const char* extend_arg_src) {
+    extend_arg_t ret = (extend_arg_t)malloc(sizeof(_extend_arg));
+    ret->ip = safe_strdup(extend_arg_src);
+//    ret->mac = NULL;
+    // IString args_list;
+    // if (Split(extend_arg_src,"&",&args_list)) {
+    //     int i;
+    //     for (i=0;i<args_list.num;i++) {
+    //         IString k_v_list;
+    //         int j = 0;
+    //         if (Split(args_list.str[i],"=",&k_v_list) ) {
+    //             if (k_v_list.num == 2) {
+    //                 if (strcmp("ip", k_v_list.str[0]) == 0) {
+    //                     ret->ip = k_v_list.str[1];
+    //                     k_v_list.str[1] = NULL;
+    //                 } else if (strcmp("mac", k_v_list.str[0]) == 0) {
+    //                     ret->mac = k_v_list.str[1];
+    //                     k_v_list.str[1] = NULL;
+    //                 }
+    //             }
+    //         }
+    //         releaseIString(&k_v_list);
+    //     }
+    //     releaseIString(&args_list);
+    // }
+    // if (ret->ip == NULL || ret->mac == NULL) {
+    //     free_extend_arg(ret);
+    //     ret = NULL;
+    // }
+    return ret;
+}
+
 /** The 404 handler is also responsible for redirecting to the auth server */
 void
 http_callback_404(httpd * webserver, request * r, int error_code)
@@ -69,8 +171,18 @@ http_callback_404(httpd * webserver, request * r, int error_code)
     char tmp_url[MAX_BUF], *url, *mac;
     s_config *config = config_get_config();
     t_auth_serv *auth_server = get_auth_server();
-
+    debug(LOG_INFO, "http_callback_404 ua:%s", r->request.user_agent);
     memset(tmp_url, 0, sizeof(tmp_url));
+    int req_src = normal_req;
+    if (strlen(r->request.user_agent) > 0) {
+        char wx_ua[128] = "micromessenger";
+        char *found = strstr(r->request.user_agent, wx_ua);
+        if (found != NULL) {
+            req_src = wx_req;
+            debug(LOG_INFO, "Is wx req.");
+        }
+    }
+    
     /* 
      * XXX Note the code below assumes that the client's request is a plain
      * http request to a standard port. At any rate, this handler is called only
@@ -79,7 +191,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
     snprintf(tmp_url, (sizeof(tmp_url) - 1), "http://%s%s%s%s",
              r->request.host, r->request.path, r->request.query[0] ? "?" : "", r->request.query);
     url = httpdUrlEncode(tmp_url);
-
     if (!is_online()) {
         /* The internet connection is down at the moment  - apologize and do not redirect anywhere */
         char *buf;
@@ -107,24 +218,49 @@ http_callback_404(httpd * webserver, request * r, int error_code)
         debug(LOG_INFO, "Sent %s an apology since auth server not online - no point sending them to auth server",
               r->clientAddr);
     } else {
-        /* Re-direct them to auth server */
+         /* Re-direct them to auth server */
         char *urlFragment;
-
         if (!(mac = arp_get(r->clientAddr))) {
             /* We could not get their MAC address */
             debug(LOG_INFO, "Failed to retrieve MAC address for ip %s, so not putting in the login request",
                   r->clientAddr);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&url=%s",
-                          auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
-                          config->gw_id, config->gw_mac, r->clientAddr, url);
+            if (req_src == wx_req) {
+                char *authurl_temp;
+                safe_asprintf(&authurl_temp, "http://%s:%d/wifidog/wx_auth", config->gw_address, config->gw_port);
+                char *authurl = httpdUrlEncode(authurl_temp);
+                free(authurl_temp);
+                char *extend = httpdUrlEncode("extend_msg_for_wifi_dog_from_qscan");
+                safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&url=%s&authurl=%s&extend=%s",
+                                  auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
+                                  config->gw_id, config->gw_mac, r->clientAddr, url, authurl, extend);
+                free(authurl);
+                free(extend);
+            } else {
+                safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&url=%s",
+                              auth_server->authserv_login_script_path_fragment, config->gw_address, config->gw_port,
+                              config->gw_id, config->gw_mac, r->clientAddr, url);
+            }
         } else {
             debug(LOG_INFO, "Got client MAC address for ip %s: %s", r->clientAddr, mac);
-            safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&mac=%s&url=%s",
-                          auth_server->authserv_login_script_path_fragment,
-                          config->gw_address, config->gw_port, config->gw_id, config->gw_mac, r->clientAddr, mac, url);
+            if (req_src == wx_req) {
+                char *authurl_temp;
+                safe_asprintf(&authurl_temp, "http://%s:%d/wifidog/wx_auth", config->gw_address, config->gw_port);
+                char *authurl = httpdUrlEncode(authurl_temp);
+                free(authurl_temp);
+                char *extend = httpdUrlEncode("extend_msg_for_wifi_dog_from_qscan");
+                safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&mac=%s&url=%s&authurl=%s&extend=%s",
+                              auth_server->authserv_login_script_path_fragment,
+                              config->gw_address, config->gw_port, config->gw_id, config->gw_mac, r->clientAddr, mac, url, 
+                              authurl, extend);
+                free(authurl);
+                free(extend);
+            } else {
+                safe_asprintf(&urlFragment, "%sgw_address=%s&gw_port=%d&gw_id=%s&gw_mac=%s&ip=%s&mac=%s&url=%s",
+                              auth_server->authserv_login_script_path_fragment,
+                              config->gw_address, config->gw_port, config->gw_id, config->gw_mac, r->clientAddr, mac, url);
+            }
             free(mac);
         }
-
         // if host is not in whitelist, maybe not in conf or domain'IP changed, it will go to here.
         debug(LOG_INFO, "Check host %s is in whitelist or not", r->request.host);       // e.g. www.example.com
         t_firewall_rule *rule;
@@ -162,7 +298,6 @@ http_callback_404(httpd * webserver, request * r, int error_code)
                 return;
             }
         }
-
         debug(LOG_INFO, "Captured %s requesting [%s] and re-directing them to login page", r->clientAddr, url);
         http_send_redirect_to_auth(r, urlFragment, "Redirect to login page");
         free(urlFragment);
@@ -253,6 +388,90 @@ http_send_redirect(request * r, const char *url, const char *text)
     free(message);
 }
 
+void http_wx_auth(httpd *webserver, request *r){
+    debug(LOG_DEBUG, "------start proce http_wx_auth----------");
+    int success = 0;
+    t_client *client;
+    char *mac;
+    extend_arg_t extend_arg = NULL;
+    httpVar *extend = httpdGetVariableByName(r, "extend");
+    if (extend != NULL && extend->value != NULL) {
+//        const int BUF_SIZE = 512;
+//        char buffer[BUF_SIZE];
+//        _httpd_decode(extend->value, buffer, BUF_SIZE);
+        extend_arg = parseExtend(extend->value);
+        debug(LOG_DEBUG, "extend:%s",extend->value);
+        if (extend_arg != NULL) {
+            debug(LOG_DEBUG, "ip:%s",extend_arg->ip);
+        } else {
+            debug(LOG_DEBUG, "extend_arg = NULL");
+        }
+    } else {
+        debug(LOG_DEBUG, "extend:NULL");
+    }
+    httpVar *tid = httpdGetVariableByName(r, "tid");
+    if (tid != NULL) {
+        debug(LOG_DEBUG, "tid:%s",tid->value);
+    } else {
+        debug(LOG_DEBUG, "tid:NULL");
+    }
+    httpVar *openId = httpdGetVariableByName(r, "openId");
+    if (openId != NULL) {
+        debug(LOG_DEBUG, "openId:%s",openId->value);
+    } else {
+        debug(LOG_DEBUG, "openId:NULL");
+    }
+    if (extend != NULL && tid != NULL && openId != NULL) {
+        char *token = NULL;
+        safe_asprintf(&token, "%s_%s_%s",
+                openId, tid, extend);
+        char *ip = safe_strdup(r->clientAddr);
+        if (extend_arg != NULL && extend_arg->ip != NULL) {
+            if (ip != NULL) {
+                free(ip);
+                ip = safe_strdup(extend_arg->ip);
+            }
+        }
+        mac = arp_get(ip);
+        if (mac == NULL) {
+            mac = safe_strdup("");
+            debug(LOG_ERR, "Failed to retrieve MAC address for ip %s", ip);
+        }
+        LOCK_CLIENT_LIST();
+        if ((client = client_list_find(ip, mac)) == NULL) {
+            debug(LOG_DEBUG, "wx_auth_New client for %s", ip);
+            client = client_list_add(ip, mac, token, wx_auth_type);
+        } else {
+            client->auth_type = wx_auth_type;
+            debug(LOG_DEBUG, "Client for %s is already in the client list", client->ip);
+        }
+        UNLOCK_CLIENT_LIST();
+        int retCode = authenticate_client(r, 1);
+        if (retCode == AUTH_ALLOWED) {
+            success = 1;
+        } else {
+            success = 0;
+        }
+        free(mac);
+        free(token);
+        if (ip != NULL) {
+            free(ip);
+        }
+    }
+    if (success) {
+        httpdOutput(r, "wx_auth_success.");
+        debug(LOG_DEBUG, "wx_auth_success.");
+    } else {
+        const s_config *config = config_get_config();
+        httpdForceAuthenticate(r, config->httpdrealm);
+        debug(LOG_DEBUG, "wx_auth_fail.");
+    }
+    if (extend_arg != NULL) {
+        free_extend_arg(extend_arg);
+    }
+    debug(LOG_DEBUG, "------end proce http_wx_auth----------");
+}
+
 typedef struct wx_temp_resume_st {
     char *ip;
     char *mac;
@@ -267,7 +486,7 @@ int wx_tmp_auth_callback(void *data, int type) {
         if (t->ip != NULL && t->mac != NULL) {
             LOCK_CLIENT_LIST();
             client = client_list_find(t->ip, t->mac);
-            if (client != NULL) {
+            if (client != NULL && client->auth_type == wx_temp_auth_type) {
                 client->auth_type = normal_auth_type;
                 showDebugInfo("resume wx_tmp_auth", client);
                 logout_client(client);
@@ -313,12 +532,16 @@ http_callback_wx_temp_auth(httpd *webserver, request *r)
                     resume->ip = safe_strdup(client->ip);
                     resume->mac = safe_strdup(client->mac);
 //                    timer_obj_t to = new_timer_obj(2 * 60 * 1000, wx_temp_auth, (void*)resume, wx_tmp_auth_callback);
-                    timer_obj_t to = new_timer_obj(10 * 1000, wx_temp_auth, (void*)resume, wx_tmp_auth_callback);
+                    timer_obj_t to = new_timer_obj(30 * 1000, wx_temp_auth, (void*)resume, wx_tmp_auth_callback);
                     appendTimerTask(to);
                     debug(LOG_DEBUG, "appendTimerTask token:%s auth_type:%d", client->token, client->auth_type);
                 }
-                authenticate_client(r);
-                send_http_page(r, "wifidog, wx support.", "temp auth.");
+                int retCode = authenticate_client(r, 1);
+                if (retCode == AUTH_ALLOWED) {
+                    httpdOutput(r, "try{jsonpTmpAuthCallback({\"success\":true})}catch(e){};");
+                } else {
+                    httpdOutput(r, "try{jsonpTmpAuthCallback({\"success\":false})}catch(e){};");
+                }
             }
             free(mac);
         }
@@ -328,7 +551,6 @@ http_callback_wx_temp_auth(httpd *webserver, request *r)
         debug(LOG_DEBUG, "-------end http_callback_wx_temp_auth-------");
         return;
     }
-    send_http_page(r, "wifidog, wx support.", "http_callback_wx_temp_auth.");
     debug(LOG_DEBUG, "-------end http_callback_wx_temp_auth-------");
 }
 
@@ -361,7 +583,7 @@ http_callback_auth(httpd * webserver, request * r)
 
             UNLOCK_CLIENT_LIST();
             if (!logout) { /* applies for case 1 and 3 from above if */
-                authenticate_client(r);
+                authenticate_client(r, 0);
             }
             free(mac);
         }

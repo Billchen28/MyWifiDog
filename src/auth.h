@@ -57,7 +57,7 @@ typedef struct _t_authresponse {
 void logout_client(t_client *);
 
 /** @brief Authenticate a single client against the central server */
-void authenticate_client(request *);
+int authenticate_client(request *, int skip_get_protal);
 
 /** @brief Periodically check if connections expired */
 void thread_client_timeout_check(const void *arg);

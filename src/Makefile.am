@@ -20,7 +20,6 @@ wifidog_SOURCES = main.c
 
 libgateway_a_SOURCES = commandline.c \
 	conf.c \
-	debug.c \
 	fw_iptables.c \
 	firewall.c \
 	gateway.c \
@@ -44,7 +43,6 @@ libgateway_a_SOURCES = commandline.c \
 noinst_HEADERS = commandline.h \
 	common.h \
 	conf.h \
-	debug.h \
 	fw_iptables.h \
 	firewall.h \
 	gateway.h \
